@@ -3,100 +3,359 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Torrent Downloader</title>
+  <title>Torrex — Local Downloader</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Orbitron:wght@500;600;700&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
-  <meta name="description" content="Local torrent downloader — WebTorrent runs on your machine, no cloud." />
+  <meta name="description" content="Local torrent downloader — aria2 runs on your machine." />
 </head>
 <body>
-  <div class="app">
-    <header class="header">
-      <div class="header-brand">
-        <span class="header-icon" aria-hidden="true"></span>
-        <div>
-          <h1>Torrent Downloader</h1>
-          <p class="subtitle">Local · Private · No cloud. Saves to <code>./downloads</code></p>
-        </div>
-      </div>
-    </header>
 
-    <section class="add-torrent glass-panel">
-      <h2 class="section-title"><span class="section-title-icon">+</span> Add torrent</h2>
-      <div class="tabs">
-        <button type="button" class="tab active" data-tab="magnet">Magnet link</button>
-        <button type="button" class="tab" data-tab="file">.torrent file</button>
-      </div>
-      <div class="tab-panel active" id="panel-magnet">
-        <form id="form-magnet" class="form">
-          <textarea id="magnet" name="magnet" placeholder="Paste magnet link here (magnet:?xt=...)" rows="2"></textarea>
-          <div id="preview-loader-magnet" class="preview-loader hidden" aria-live="polite">
-            <span class="preview-loader-spinner"></span>
-            <span class="preview-loader-text">Fetching torrent info…</span>
-          </div>
-          <button type="submit" class="btn btn-primary" id="btn-add-magnet">Add torrent</button>
-        </form>
-      </div>
-      <div class="tab-panel" id="panel-file">
-        <form id="form-file" class="form">
-          <label class="file-label">
-            <input type="file" name="torrent" accept=".torrent" />
-            <span class="file-text">Choose .torrent file</span>
-          </label>
-          <div id="preview-loader-file" class="preview-loader hidden" aria-live="polite">
-            <span class="preview-loader-spinner"></span>
-            <span class="preview-loader-text">Fetching torrent info…</span>
-          </div>
-          <button type="submit" class="btn btn-primary" id="btn-add-file">Add torrent</button>
-        </form>
-      </div>
-    </section>
-
-    <section class="torrents">
-      <h2 class="section-title"><span class="section-title-icon">↓</span> Downloads</h2>
-      <div id="torrent-list" class="torrent-list"></div>
-      <p id="empty-state" class="empty-state">No torrents yet. Add a magnet link or .torrent file above.</p>
-    </section>
-
-    <footer class="footer glass-panel">
-      <p class="engine-note">Powered by <strong>WebTorrent</strong> — runs locally. No third‑party engine; your data stays on your machine.</p>
-    </footer>
+  <!-- Background mesh blobs -->
+  <div class="bg-mesh" aria-hidden="true">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
   </div>
 
-  <div id="preview-modal" class="modal" aria-hidden="true" role="dialog" aria-labelledby="preview-modal-title">
-    <div class="modal-overlay"></div>
-    <div class="modal-content modal-content-preview">
+  <div class="app">
+
+    <!-- ═══ Sidebar ═══ -->
+    <aside class="sidebar">
+
+      <!-- Brand -->
+      <div class="sidebar-brand">
+        <div class="brand-mark">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-name">Torrex</span>
+          <span class="brand-tag">Local &amp; Private</span>
+        </div>
+      </div>
+
+      <!-- Summary stats -->
+      <div class="sidebar-summary">
+        <div class="sum-item">
+          <span class="sum-val" id="stat-active">—</span>
+          <span class="sum-lbl">Active</span>
+        </div>
+        <div class="sum-sep"></div>
+        <div class="sum-item">
+          <span class="sum-val" id="stat-done">—</span>
+          <span class="sum-lbl">Done</span>
+        </div>
+        <div class="sum-sep"></div>
+        <div class="sum-item">
+          <span class="sum-val" id="stat-total">—</span>
+          <span class="sum-lbl">Total</span>
+        </div>
+      </div>
+
+      <!-- Speed panel -->
+      <div class="speed-panel">
+        <div class="speed-row">
+          <div class="speed-icon dl">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="7 10 12 15 17 10"/><line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+          </div>
+          <span class="speed-label">Download</span>
+          <span class="speed-val" id="total-dl-speed">—</span>
+        </div>
+        <div class="speed-row">
+          <div class="speed-icon ul">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="17 14 12 9 7 14"/><line x1="12" y1="21" x2="12" y2="9"/>
+            </svg>
+          </div>
+          <span class="speed-label">Upload</span>
+          <span class="speed-val" id="total-ul-speed">—</span>
+        </div>
+      </div>
+
+      <!-- Sidebar footer -->
+      <div class="sidebar-footer">
+        <div class="engine-row">
+          <span class="engine-dot"></span>
+          <span class="engine-label">aria2 · running</span>
+        </div>
+        <p class="saves-to">Saves to <code>./downloads</code></p>
+        <div class="sidebar-actions">
+          <button class="sidebar-action-btn" id="btn-trackers-refresh" title="Refresh tracker list">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="23 4 23 10 17 10"/>
+              <polyline points="1 20 1 14 7 14"/>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+            </svg>
+            Refresh trackers
+          </button>
+          <button class="sidebar-action-btn" id="theme-toggle" title="Toggle theme">
+            <svg id="icon-sun" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="5"/>
+              <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+              <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+            </svg>
+            <svg id="icon-moon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+            </svg>
+            <span id="theme-label">Light mode</span>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ═══ Main ═══ -->
+    <main class="main">
+      <div class="main-inner">
+
+        <!-- Header -->
+        <div class="view-header">
+          <div class="view-title-group">
+            <h2 class="view-title">Downloads</h2>
+            <span class="count-pill" id="count-badge" style="display:none">0</span>
+          </div>
+          <button class="fab" id="fab-add" aria-expanded="false" title="Add Torrent">
+            <svg class="fab-icon-add" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"/>
+              <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            <svg class="fab-icon-close" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+            <span>Add</span>
+          </button>
+        </div>
+
+        <!-- Inline add-torrent panel (collapsible) -->
+        <div class="add-panel-wrap" id="add-panel-wrap">
+          <div class="add-panel-inner">
+            <div class="add-panel">
+
+              <!-- Tab switcher -->
+              <div class="tab-bar">
+                <button class="tab-pill active" data-tab="magnet">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                  </svg>
+                  Magnet link
+                </button>
+                <button class="tab-pill" data-tab="file">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                  </svg>
+                  .torrent file
+                </button>
+              </div>
+
+              <!-- Magnet panel -->
+              <div class="tab-panel active" id="panel-magnet">
+                <form id="form-magnet" class="add-form">
+                  <div class="magnet-input-wrap">
+                    <svg class="magnet-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                    </svg>
+                    <textarea id="magnet" name="magnet" placeholder="Paste magnet link here…" rows="3" spellcheck="false" autocomplete="off"></textarea>
+                  </div>
+                  <div id="preview-loader-magnet" class="preview-loader hidden">
+                    <div class="loader-dots"><span></span><span></span><span></span></div>
+                    <span>Fetching metadata…</span>
+                  </div>
+                  <button type="submit" class="btn btn-primary btn-submit" id="btn-add-magnet">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                      <polyline points="7 10 12 15 17 10"/>
+                      <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    Add Torrent
+                  </button>
+                </form>
+              </div>
+
+              <!-- File panel -->
+              <div class="tab-panel" id="panel-file">
+                <form id="form-file" class="add-form">
+                  <label class="file-drop-zone" id="file-drop-zone">
+                    <input type="file" name="torrent" accept=".torrent" class="file-input" />
+                    <div class="file-drop-content">
+                      <div class="file-drop-icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                          <polyline points="14 2 14 8 20 8"/>
+                          <line x1="12" y1="18" x2="12" y2="12"/>
+                          <line x1="9" y1="15" x2="12" y2="12"/>
+                          <line x1="15" y1="15" x2="12" y2="12"/>
+                        </svg>
+                      </div>
+                      <p class="file-drop-title" id="file-drop-title">Drop .torrent file here</p>
+                      <p class="file-drop-sub">or click to browse</p>
+                    </div>
+                  </label>
+                  <div id="preview-loader-file" class="preview-loader hidden">
+                    <div class="loader-dots"><span></span><span></span><span></span></div>
+                    <span>Reading metadata…</span>
+                  </div>
+                  <button type="submit" class="btn btn-primary btn-submit" id="btn-add-file">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                      <polyline points="7 10 12 15 17 10"/>
+                      <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    Add Torrent
+                  </button>
+                </form>
+              </div>
+
+            </div><!-- /add-panel -->
+          </div><!-- /add-panel-inner -->
+        </div><!-- /add-panel-wrap -->
+
+        <!-- Torrent list -->
+        <div id="torrent-list" class="torrent-list"></div>
+
+        <!-- Empty state -->
+        <div id="empty-state" class="empty-state">
+          <div class="empty-art">
+            <div class="empty-ring ring-1"></div>
+            <div class="empty-ring ring-2"></div>
+            <div class="empty-ring ring-3"></div>
+            <div class="empty-icon-wrap">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+            </div>
+          </div>
+          <h3 class="empty-title">No downloads yet</h3>
+          <p class="empty-sub">Add a magnet link or drop a .torrent file to get started</p>
+          <button class="btn btn-primary" id="empty-add-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            Add your first torrent
+          </button>
+        </div>
+
+      </div><!-- /main-inner -->
+    </main>
+  </div>
+
+  <!-- ═══ Preview modal ═══ -->
+  <div id="preview-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="preview-modal-title">
+    <div class="modal-scrim"></div>
+    <div class="modal-panel">
+      <div class="modal-drag-handle"></div>
       <div class="modal-header">
-        <h2 id="preview-modal-title" class="modal-title">Add torrent?</h2>
-        <button type="button" class="modal-close preview-modal-close" aria-label="Close">&times;</button>
+        <h2 class="modal-title" id="preview-modal-title">Confirm Download</h2>
+        <button type="button" class="modal-close-btn preview-modal-close" aria-label="Close">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
       </div>
       <div class="modal-body">
-        <div id="preview-summary" class="details-summary"></div>
-        <h3 class="details-files-heading">Files</h3>
-        <div id="preview-files" class="details-files"></div>
+        <div id="preview-summary" class="detail-grid"></div>
+        <div class="section-label">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+          Files included
+        </div>
+        <div id="preview-files" class="file-list-wrap"></div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-ghost preview-cancel">Cancel</button>
-        <button type="button" class="btn btn-primary preview-add">Add torrent</button>
+        <button type="button" class="btn btn-primary preview-add">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Start Download
+        </button>
       </div>
     </div>
   </div>
 
-  <div id="details-modal" class="modal" aria-hidden="true" role="dialog" aria-labelledby="modal-title">
-    <div class="modal-overlay"></div>
-    <div class="modal-content">
+  <!-- ═══ Details modal ═══ -->
+  <div id="details-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="details-modal-title">
+    <div class="modal-scrim"></div>
+    <div class="modal-panel">
+      <div class="modal-drag-handle"></div>
       <div class="modal-header">
-        <h2 id="modal-title" class="modal-title">Torrent details</h2>
-        <button type="button" class="modal-close" aria-label="Close">&times;</button>
+        <h2 class="modal-title" id="details-modal-title">Torrent Details</h2>
+        <button type="button" class="modal-close-btn modal-close" aria-label="Close">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
       </div>
       <div class="modal-body">
-        <div id="details-summary" class="details-summary"></div>
-        <h3 class="details-files-heading">Files</h3>
-        <div id="details-files" class="details-files"></div>
+        <div id="details-summary" class="detail-grid"></div>
+        <div class="section-label">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+          Files
+        </div>
+        <div id="details-files" class="file-list-wrap"></div>
       </div>
     </div>
   </div>
+
+  <!-- ═══ Toast ═══ -->
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
   <script src="app.js"></script>
+  <script>
+    // Add panel toggle
+    function toggleAddPanel(open) {
+      const wrap = document.getElementById('add-panel-wrap');
+      const fab  = document.getElementById('fab-add');
+      if (!wrap) return;
+      const isOpen = open !== undefined ? open : !wrap.classList.contains('open');
+      wrap.classList.toggle('open', isOpen);
+      if (fab) {
+        fab.setAttribute('aria-expanded', isOpen);
+        const span        = fab.querySelector('span');
+        const iconAdd     = fab.querySelector('.fab-icon-add');
+        const iconClose   = fab.querySelector('.fab-icon-close');
+        if (span) span.textContent = isOpen ? 'Close' : 'Add';
+        if (iconAdd)   iconAdd.style.display   = isOpen ? 'none' : '';
+        if (iconClose) iconClose.style.display = isOpen ? '' : 'none';
+      }
+    }
+
+    document.getElementById('fab-add')?.addEventListener('click', () => toggleAddPanel());
+    document.getElementById('empty-add-btn')?.addEventListener('click', () => toggleAddPanel(true));
+
+    // Tab switching
+    document.querySelectorAll('.tab-pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        const target = pill.dataset.tab;
+        if (!target) return;
+        document.querySelectorAll('.tab-pill').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+        pill.classList.add('active');
+        document.getElementById('panel-' + target)?.classList.add('active');
+      });
+    });
+  </script>
 </body>
 </html>

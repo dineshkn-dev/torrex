@@ -1,150 +1,459 @@
+'use strict';
+
 const API = '/api';
 
-function showError(msg) {
-  const el = document.createElement('div');
-  el.className = 'error-toast';
-  el.textContent = msg;
-  document.body.appendChild(el);
-  setTimeout(() => el.remove(), 4000);
-  // Also log to console for debugging
-  // eslint-disable-next-line no-console
-  console.error('[UI error]', msg);
+/* ═══════════════════════════════════════════════════════════════
+   Utilities
+════════════════════════════════════════════════════════════════ */
+function escapeHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = String(str ?? '');
+  return d.innerHTML;
 }
 
-function formatSpeed(bytesPerSec) {
-  if (!Number.isFinite(bytesPerSec) || bytesPerSec <= 0) return '—';
-  const units = ['B/s', 'KB/s', 'MB/s'];
-  let i = 0;
-  let v = bytesPerSec;
-  while (v >= 1024 && i < units.length - 1) {
-    v /= 1024;
-    i++;
-  }
-  return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+function formatSpeed(bps) {
+  if (!Number.isFinite(bps) || bps <= 0) return '—';
+  if (bps < 1024)        return `${bps} B/s`;
+  if (bps < 1048576)     return `${(bps / 1024).toFixed(1)} KB/s`;
+  return `${(bps / 1048576).toFixed(2)} MB/s`;
 }
 
 function formatSize(bytes) {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  let i = 0;
-  let v = bytes;
-  while (v >= 1024 && i < units.length - 1) {
-    v /= 1024;
-    i++;
-  }
-  return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+  if (bytes < 1024)        return `${bytes} B`;
+  if (bytes < 1048576)     return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1073741824)  return `${(bytes / 1048576).toFixed(1)} MB`;
+  return `${(bytes / 1073741824).toFixed(2)} GB`;
+}
+
+function clamp(n, lo, hi) { return Math.min(hi, Math.max(lo, n)); }
+
+/* ═══════════════════════════════════════════════════════════════
+   Toast
+════════════════════════════════════════════════════════════════ */
+const TOAST_ICONS = {
+  error:   `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,
+  success: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
+  info:    `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`,
+};
+
+function showToast(msg, type = 'info') {
+  const c = document.getElementById('toast-container');
+  if (!c) return;
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `<div class="toast-icon">${TOAST_ICONS[type] ?? TOAST_ICONS.info}</div><span>${escapeHtml(msg)}</span>`;
+  c.appendChild(el);
+  setTimeout(() => {
+    el.style.animation = 'toastOut .25s var(--ease) both';
+    el.addEventListener('animationend', () => el.remove(), { once: true });
+  }, 4000);
+  console[type === 'error' ? 'error' : 'log']('[toast]', msg);
+}
+
+function showError(msg) { showToast(msg, 'error'); }
+
+/* ═══════════════════════════════════════════════════════════════
+   SVG icons (inline, reused)
+════════════════════════════════════════════════════════════════ */
+const IC = {
+  dl:     `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 10 12 15 17 10"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`,
+  ul:     `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 14 12 9 7 14"/><line x1="12" y1="21" x2="12" y2="9"/></svg>`,
+  peers:  `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
+  pause:  `<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>`,
+  play:   `<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>`,
+  retry:  `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>`,
+  info:   `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,
+  trash:  `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>`,
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   State
+════════════════════════════════════════════════════════════════ */
+const pausedSet = new Set();
+
+/* ═══════════════════════════════════════════════════════════════
+   Card rendering
+════════════════════════════════════════════════════════════════ */
+function getCardState(t) {
+  const isDone   = !!t?.done;
+  const isFailed = !!t?.failed;
+  const isPaused = !!t?.paused || pausedSet.has(t?.infoHash ?? '');
+  const isActive = !isDone && !isFailed && !isPaused;
+
+  let badgeClass = 'downloading';
+  let badgeLabel = 'Downloading';
+  if (isDone)   { badgeClass = 'done';   badgeLabel = 'Complete'; }
+  if (isPaused) { badgeClass = 'paused'; badgeLabel = 'Paused'; }
+  if (isFailed) { badgeClass = 'failed'; badgeLabel = 'Failed'; }
+
+  return { isDone, isFailed, isPaused, isActive, badgeClass, badgeLabel };
 }
 
 function renderTorrent(t) {
-  // Defensive defaults so we don't crash on bad data
-  const progress = Number.isFinite(t?.progress) ? t.progress : 0;
-  const downloadSpeed = Number.isFinite(t?.downloadSpeed) ? t.downloadSpeed : 0;
-  const uploadSpeed = Number.isFinite(t?.uploadSpeed) ? t.uploadSpeed : 0;
-  const numPeers = Number.isFinite(t?.numPeers) ? t.numPeers : 0;
-  const length = Number.isFinite(t?.length) ? t.length : 0;
+  const progress = clamp(Number.isFinite(t?.progress) ? t.progress : 0, 0, 100);
+  const dlSpeed  = Number.isFinite(t?.downloadSpeed) ? t.downloadSpeed : 0;
+  const ulSpeed  = Number.isFinite(t?.uploadSpeed)   ? t.uploadSpeed   : 0;
+  const numPeers = Number.isFinite(t?.numPeers)      ? t.numPeers      : 0;
+  const length   = Number.isFinite(t?.length)        ? t.length        : 0;
+
+  const { isDone, isFailed, isPaused, badgeClass, badgeLabel } = getCardState(t);
 
   const card = document.createElement('div');
-  card.className = 'torrent-card' + (t?.done ? ' done' : '');
-  card.dataset.infoHash = t?.infoHash || '';
+  card.className = [
+    'torrent-card',
+    isDone   ? 'done'   : '',
+    isFailed ? 'failed' : '',
+  ].filter(Boolean).join(' ');
+  card.dataset.infoHash = t?.infoHash ?? '';
+  card.dataset.paused   = isPaused ? 'true' : 'false';
+  card.dataset.failed   = isFailed ? 'true' : 'false';
+
   card.innerHTML = `
-    <div class="torrent-name">${escapeHtml(t?.name || 'Unknown')}</div>
-    <div class="torrent-meta">
-      <span>${progress.toFixed(1)}%</span>
-      <span>↓ ${formatSpeed(downloadSpeed)}</span>
-      <span>↑ ${formatSpeed(uploadSpeed)}</span>
-      <span>${numPeers} peers</span>
-      <span>${formatSize(length)}</span>
+    <div class="card-body">
+      <div class="card-top">
+        <p class="card-name">${escapeHtml(t?.name || 'Connecting…')}</p>
+        <span class="card-badge ${badgeClass}">
+          <span class="badge-dot"></span>${badgeLabel}
+        </span>
+      </div>
+
+      <div class="card-progress">
+        <div class="progress-header">
+          <span class="progress-pct">${progress.toFixed(1)}%</span>
+          <span class="progress-eta">${length > 0 ? formatSize(length) : ''}</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" style="width:${progress}%"></div>
+        </div>
+      </div>
+
+      <div class="card-stats">
+        <span class="stat-chip dl">${IC.dl}<span class="sv-dl">${formatSpeed(dlSpeed)}</span></span>
+        <span class="stat-chip ul">${IC.ul}<span class="sv-ul">${formatSpeed(ulSpeed)}</span></span>
+        <span class="stat-chip">${IC.peers}<span class="sv-peers">${numPeers} peers</span></span>
+      </div>
     </div>
-    <div class="torrent-progress-wrap">
-      <div class="torrent-progress-bar" style="width:${progress}%"></div>
-    </div>
-    <div class="torrent-actions">
-      <button type="button" class="btn btn-details btn-details-open">Details</button>
-      <button type="button" class="btn btn-danger btn-remove">Remove</button>
+
+    <div class="card-footer">
+      <div class="card-actions-default card-actions">
+        ${isFailed
+          ? `<button class="action-btn retry-btn">${IC.retry} Retry</button>`
+          : (!isDone
+              ? `<button class="action-btn pause-btn">${isPaused ? IC.play : IC.pause}
+                  <span class="pause-label">${isPaused ? 'Resume' : 'Pause'}</span>
+                </button>`
+              : '')
+        }
+        ${!isFailed
+          ? `<button class="action-btn details-btn">${IC.info} Details</button>`
+          : ''
+        }
+        <button class="action-btn remove-btn">${IC.trash} Remove</button>
+      </div>
+
+      <div class="confirm-remove-row card-actions">
+        <span class="confirm-remove-label">Remove this torrent?</span>
+        <button class="action-btn cancel-remove-btn">Cancel</button>
+        <button class="action-btn confirm-remove-btn">Remove</button>
+      </div>
     </div>
   `;
-  const removeBtn = card.querySelector('.btn-remove');
-  const detailsBtn = card.querySelector('.btn-details-open');
-  removeBtn.addEventListener('click', (e) => { e.stopPropagation(); removeTorrent(t.infoHash); });
-  detailsBtn.addEventListener('click', (e) => { e.stopPropagation(); openDetails(t.infoHash); });
+
+  // Pause / resume
+  card.querySelector('.pause-btn')?.addEventListener('click', e => {
+    e.stopPropagation();
+    togglePause(t.infoHash);
+  });
+
+  // Retry
+  card.querySelector('.retry-btn')?.addEventListener('click', e => {
+    e.stopPropagation();
+    retryTorrent(t.infoHash);
+  });
+
+  // Details
+  card.querySelector('.details-btn')?.addEventListener('click', e => {
+    e.stopPropagation();
+    openDetails(t.infoHash);
+  });
+
+  // Remove flow
+  card.querySelector('.remove-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    card.classList.add('confirming-remove');
+  });
+  card.querySelector('.cancel-remove-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    card.classList.remove('confirming-remove');
+  });
+  card.querySelector('.confirm-remove-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    card.classList.remove('confirming-remove');
+    removeTorrent(t.infoHash);
+  });
+
   return card;
 }
 
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
+/* In-place update — no DOM thrashing */
+function updateCardInPlace(card, t) {
+  const progress = clamp(Number.isFinite(t?.progress) ? t.progress : 0, 0, 100);
+  const dlSpeed  = Number.isFinite(t?.downloadSpeed) ? t.downloadSpeed : 0;
+  const ulSpeed  = Number.isFinite(t?.uploadSpeed)   ? t.uploadSpeed   : 0;
+  const numPeers = Number.isFinite(t?.numPeers)      ? t.numPeers      : 0;
+
+  const { isDone, isFailed, isPaused, badgeClass, badgeLabel } = getCardState(t);
+
+  // Card-level classes / attributes
+  card.classList.toggle('done',   isDone);
+  card.classList.toggle('failed', isFailed);
+  card.dataset.paused = isPaused ? 'true' : 'false';
+  card.dataset.failed = isFailed ? 'true' : 'false';
+
+  // Name (only if changed)
+  const nameEl = card.querySelector('.card-name');
+  const newName = escapeHtml(t?.name || 'Connecting…');
+  if (nameEl && nameEl.innerHTML !== newName) nameEl.innerHTML = newName;
+
+  // Badge
+  if (!card.classList.contains('confirming-remove')) {
+    const badge = card.querySelector('.card-badge');
+    if (badge) {
+      badge.className = `card-badge ${badgeClass}`;
+      badge.innerHTML = `<span class="badge-dot"></span>${badgeLabel}`;
+    }
+  }
+
+  // Progress bar
+  const fill = card.querySelector('.progress-fill');
+  if (fill) fill.style.width = `${progress}%`;
+
+  const pct = card.querySelector('.progress-pct');
+  if (pct) pct.textContent = `${progress.toFixed(1)}%`;
+
+  // Stats
+  const svDl    = card.querySelector('.sv-dl');
+  const svUl    = card.querySelector('.sv-ul');
+  const svPeers = card.querySelector('.sv-peers');
+  if (svDl)    svDl.textContent    = formatSpeed(dlSpeed);
+  if (svUl)    svUl.textContent    = formatSpeed(ulSpeed);
+  if (svPeers) svPeers.textContent = `${numPeers} peers`;
+
+  // Pause button label / icon
+  const pauseBtn   = card.querySelector('.pause-btn');
+  const pauseLabel = card.querySelector('.pause-label');
+  if (pauseBtn && pauseLabel) {
+    pauseBtn.innerHTML = `${isPaused ? IC.play : IC.pause}<span class="pause-label">${isPaused ? 'Resume' : 'Pause'}</span>`;
+  }
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   Render list (DOM diff — no full re-render)
+════════════════════════════════════════════════════════════════ */
+function renderList(list) {
+  const container  = document.getElementById('torrent-list');
+  const emptyState = document.getElementById('empty-state');
+
+  // Sync pause state from server (source of truth)
+  list.forEach(t => {
+    if (t?.paused) pausedSet.add(t.infoHash ?? '');
+    else pausedSet.delete(t?.infoHash ?? '');
+  });
+
+  // Map existing cards
+  const existing = new Map();
+  container.querySelectorAll('.torrent-card[data-info-hash]').forEach(el =>
+    existing.set(el.dataset.infoHash, el)
+  );
+
+  // Remove stale cards
+  existing.forEach((el, hash) => {
+    if (!list.some(t => t.infoHash === hash)) {
+      el.style.animation = 'none';
+      el.style.transition = 'opacity .2s, transform .2s';
+      el.style.opacity = '0';
+      el.style.transform = 'scale(0.97)';
+      setTimeout(() => el.remove(), 200);
+    }
+  });
+
+  // Update or insert
+  list.forEach((t, idx) => {
+    const existingCard = existing.get(t.infoHash);
+    if (existingCard) {
+      updateCardInPlace(existingCard, t);
+      if (container.children[idx] !== existingCard) {
+        container.insertBefore(existingCard, container.children[idx] ?? null);
+      }
+    } else {
+      const newCard = renderTorrent(t);
+      newCard.style.animationDelay = `${idx * 40}ms`;
+      container.insertBefore(newCard, container.children[idx] ?? null);
+    }
+  });
+
+  // Empty state
+  if (emptyState) emptyState.classList.toggle('show', list.length === 0);
+
+  // Active count badge (main header)
+  const badge = document.getElementById('count-badge');
+  const active = list.filter(t => !t.done && !t.failed && !t.paused).length;
+  if (badge) {
+    badge.textContent = active;
+    badge.style.display = active > 0 ? 'flex' : 'none';
+  }
+
+  // Sidebar summary stats
+  const statActive = document.getElementById('stat-active');
+  const statDone   = document.getElementById('stat-done');
+  const statTotal  = document.getElementById('stat-total');
+  if (statActive) statActive.textContent = active;
+  if (statDone)   statDone.textContent   = list.filter(t => t.done).length;
+  if (statTotal)  statTotal.textContent  = list.length;
+
+  updateSpeeds(list);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Sidebar speeds
+════════════════════════════════════════════════════════════════ */
+function updateSpeeds(list) {
+  let totalDl = 0, totalUl = 0;
+  list.forEach(t => {
+    if (t.failed || t.paused || t.done) return;
+    totalDl += Number.isFinite(t.downloadSpeed) ? t.downloadSpeed : 0;
+    totalUl += Number.isFinite(t.uploadSpeed)   ? t.uploadSpeed   : 0;
+  });
+  const dlEl = document.getElementById('total-dl-speed');
+  const ulEl = document.getElementById('total-ul-speed');
+  if (dlEl) dlEl.textContent = formatSpeed(totalDl);
+  if (ulEl) ulEl.textContent = formatSpeed(totalUl);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   API helpers
+════════════════════════════════════════════════════════════════ */
 async function fetchTorrents() {
   const res = await fetch(`${API}/torrents`);
   if (!res.ok) throw new Error('Failed to load torrents');
   return res.json();
 }
 
-function renderList(list) {
-  const container = document.getElementById('torrent-list');
-  const empty = document.getElementById('empty-state');
-  container.innerHTML = '';
-  // eslint-disable-next-line no-console
-  console.debug('[renderList] received', list);
-  list.forEach((t) => container.appendChild(renderTorrent(t)));
-  empty.classList.toggle('hidden', list.length > 0);
-}
-
 async function poll() {
   try {
-    const list = await fetchTorrents();
-    renderList(list);
+    renderList(await fetchTorrents());
   } catch (e) {
-    // eslint-disable-next-line no-console
-    console.error('[poll] Failed to fetch torrents', e);
-    showError(e.message || 'Could not refresh list');
+    console.error('[poll]', e);
   }
 }
 
-async function fetchPreview(magnet) {
-  const res = await fetch(`${API}/torrents/preview`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ magnet: magnet.trim() }),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Failed to get preview');
-  return data;
+async function removeTorrent(infoHash) {
+  const res = await fetch(`${API}/torrents/${encodeURIComponent(infoHash)}`, { method: 'DELETE' });
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    showError(d.error || 'Failed to remove');
+    return;
+  }
+  pausedSet.delete(infoHash);
+  if (detailsOpenFor === infoHash) closeDetailsModal();
+  showToast('Torrent removed', 'success');
+  poll();
 }
 
-async function fetchPreviewFile(file) {
-  const form = new FormData();
-  form.append('torrent', file);
-  const res = await fetch(`${API}/torrents/preview/file`, {
-    method: 'POST',
-    body: form,
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Failed to get preview');
-  return data;
+async function togglePause(infoHash) {
+  const wasPaused = pausedSet.has(infoHash);
+  const pause = !wasPaused;
+  try {
+    const res = await fetch(`${API}/torrents/${encodeURIComponent(infoHash)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pause }),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      showError(d.error || 'Failed to pause/resume');
+      return;
+    }
+    pause ? pausedSet.add(infoHash) : pausedSet.delete(infoHash);
+    // Instant card update
+    const card = document.querySelector(`.torrent-card[data-info-hash="${infoHash}"]`);
+    if (card) {
+      card.dataset.paused = pause ? 'true' : 'false';
+      const badge = card.querySelector('.card-badge');
+      if (badge) {
+        badge.className = `card-badge ${pause ? 'paused' : 'downloading'}`;
+        badge.innerHTML = `<span class="badge-dot"></span>${pause ? 'Paused' : 'Downloading'}`;
+      }
+      const btn = card.querySelector('.pause-btn');
+      if (btn) {
+        btn.innerHTML = `${pause ? IC.play : IC.pause}<span class="pause-label">${pause ? 'Resume' : 'Pause'}</span>`;
+      }
+    }
+    showToast(pause ? 'Paused' : 'Resumed', 'success');
+  } catch (err) {
+    showError(err.message || 'Failed to pause/resume');
+  }
 }
 
-function showPreviewModal(data, onConfirm) {
-  const name = data?.name || 'Unknown';
+async function retryTorrent(infoHash) {
+  try {
+    const res = await fetch(`${API}/torrents/${encodeURIComponent(infoHash)}/retry`, { method: 'POST' });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(d.error || 'Failed to retry');
+    showToast('Re-connecting to peers…', 'success');
+    poll();
+  } catch (err) {
+    showError(err.message || 'Failed to retry torrent');
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Preview modal
+════════════════════════════════════════════════════════════════ */
+function buildDetailGrid(data) {
+  const name   = data?.name   ?? 'Unknown';
   const length = Number.isFinite(data?.length) ? data.length : 0;
-  const files = Array.isArray(data?.files) ? data.files : [];
+  return `
+    <div class="detail-row">
+      <span class="detail-label">Name</span>
+      <span class="detail-value">${escapeHtml(name)}</span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Size</span>
+      <span class="detail-value">${formatSize(length)}</span>
+    </div>`;
+}
 
-  document.getElementById('preview-summary').innerHTML = `
-    <div class="detail-row"><span class="detail-label">Name</span><span class="detail-value">${escapeHtml(name)}</span></div>
-    <div class="detail-row"><span class="detail-label">Size</span><span class="detail-value">${formatSize(length)}</span></div>
-  `;
-
-  const filesEl = document.getElementById('preview-files');
-  if (files.length === 0) {
-    filesEl.innerHTML = '<p class="detail-value">No file list yet (metadata may still be loading).</p>';
-  } else {
-    const rows = files.map((f) => `<tr><td class="file-name">${escapeHtml(f?.name || '—')}</td><td>${formatSize(f?.length ?? 0)}</td></tr>`).join('');
-    filesEl.innerHTML = `<table><thead><tr><th>File</th><th>Size</th></tr></thead><tbody>${rows}</tbody></table>`;
+function buildFilesTable(files, showProgress = false) {
+  if (!files?.length) {
+    return '<p style="padding:14px 16px;font-size:12.5px;color:var(--text-3)">No file list — metadata still loading.</p>';
   }
+  const rows = files.map(f => {
+    const fPct = Number.isFinite(f?.progress) ? clamp(f.progress, 0, 100) : 0;
+    return `<tr>
+      <td class="file-name-cell">${escapeHtml(f?.name ?? '—')}</td>
+      <td style="font-family:var(--mono);font-size:11.5px;color:var(--text-2);white-space:nowrap">${formatSize(f?.length ?? 0)}</td>
+      ${showProgress ? `<td>
+        <div class="mini-progress">
+          <div class="mini-bar"><div class="mini-bar-fill" style="width:${fPct}%"></div></div>
+          <span class="mini-pct">${fPct.toFixed(0)}%</span>
+        </div>
+      </td>` : ''}
+    </tr>`;
+  }).join('');
+  return `<table>
+    <thead><tr>
+      <th>File</th><th>Size</th>${showProgress ? '<th style="width:110px">Progress</th>' : ''}
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
 
-  window.__previewOnConfirm = onConfirm;
+function openPreviewModal(data, onConfirm) {
+  document.getElementById('preview-summary').innerHTML = buildDetailGrid(data);
+  document.getElementById('preview-files').innerHTML   = buildFilesTable(Array.isArray(data?.files) ? data.files : []);
+  window.__previewConfirm = onConfirm;
   document.getElementById('preview-modal').classList.add('is-open');
   document.body.style.overflow = 'hidden';
 }
@@ -152,23 +461,59 @@ function showPreviewModal(data, onConfirm) {
 function closePreviewModal() {
   document.getElementById('preview-modal').classList.remove('is-open');
   document.body.style.overflow = '';
-  window.__previewOnConfirm = null;
+  window.__previewConfirm = null;
 }
 
-async function confirmAddFromPreview() {
-  const fn = window.__previewOnConfirm;
+async function confirmPreview() {
+  const fn = window.__previewConfirm;
   if (!fn) return;
   closePreviewModal();
   try {
     await fn();
+    showToast('Torrent added — connecting to peers…', 'success');
+    // Close the add panel
+    document.getElementById('add-panel-wrap')?.classList.remove('open');
+    const fab = document.getElementById('fab-add');
+    if (fab) {
+      fab.setAttribute('aria-expanded', 'false');
+      const span = fab.querySelector('span');
+      const iconAdd   = fab.querySelector('.fab-icon-add');
+      const iconClose = fab.querySelector('.fab-icon-close');
+      if (span) span.textContent = 'Add';
+      if (iconAdd)   iconAdd.style.display   = '';
+      if (iconClose) iconClose.style.display = 'none';
+    }
     poll();
+    // Open details for latest torrent
     const list = await fetchTorrents();
     const added = list[list.length - 1];
-    if (added?.infoHash) openDetails(added.infoHash);
+    if (added?.infoHash) setTimeout(() => openDetails(added.infoHash), 600);
   } catch (err) {
-    console.error('[preview confirm] Add failed', err);
     showError(err.message || 'Failed to add torrent');
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Add torrent API calls
+════════════════════════════════════════════════════════════════ */
+async function fetchPreviewMagnet(magnet) {
+  const res = await fetch(`${API}/torrents/preview`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ magnet: magnet.trim() }),
+  });
+  const d = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(d.error || 'Failed to fetch metadata');
+  return d;
+}
+
+async function fetchPreviewFile(file) {
+  const form = new FormData();
+  form.append('torrent', file);
+  const res = await fetch(`${API}/torrents/preview/file`, { method: 'POST', body: form });
+  const d = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(d.error || 'Failed to read .torrent file');
+  return d;
 }
 
 async function addMagnet(magnet) {
@@ -177,218 +522,219 @@ async function addMagnet(magnet) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ magnet: magnet.trim() }),
   });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Failed to add torrent');
+  const d = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(d.error || 'Failed to add torrent');
 }
 
 async function addFile(file) {
   const form = new FormData();
   form.append('torrent', file);
-  const res = await fetch(`${API}/torrents/file`, {
-    method: 'POST',
-    body: form,
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Failed to add torrent');
+  const res = await fetch(`${API}/torrents/file`, { method: 'POST', body: form });
+  const d = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(d.error || 'Failed to add torrent');
 }
 
-async function removeTorrent(infoHash) {
-  if (!confirm('Remove this torrent from the list? Files on disk will stay.')) return;
-  const res = await fetch(`${API}/torrents/${encodeURIComponent(infoHash)}`, { method: 'DELETE' });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    showError(data.error || 'Failed to remove');
-    return;
-  }
-  if (detailsModalOpenFor === infoHash) closeModal();
-  poll();
-}
-
-// --- Details modal ---
-let detailsModalOpenFor = null;
-let detailsModalRefreshTimer = null;
-
-async function fetchTorrentDetails(infoHash) {
-  const res = await fetch(`${API}/torrents/${encodeURIComponent(infoHash)}`);
-  if (!res.ok) throw new Error('Torrent not found');
-  return res.json();
-}
-
-function populateDetailsModal(t) {
-  const progress = Number.isFinite(t?.progress) ? t.progress : 0;
-  const downloadSpeed = Number.isFinite(t?.downloadSpeed) ? t.downloadSpeed : 0;
-  const uploadSpeed = Number.isFinite(t?.uploadSpeed) ? t.uploadSpeed : 0;
-  const numPeers = Number.isFinite(t?.numPeers) ? t.numPeers : 0;
-  const length = Number.isFinite(t?.length) ? t.length : 0;
-  const name = t?.name || 'Unknown';
-  const infoHash = t?.infoHash || '';
-  const files = Array.isArray(t?.files) ? t.files : [];
-
-  const summaryEl = document.getElementById('details-summary');
-  summaryEl.innerHTML = `
-    <div class="detail-row"><span class="detail-label">Name</span><span class="detail-value">${escapeHtml(name)}</span></div>
-    <div class="detail-row"><span class="detail-label">Info hash</span><span class="detail-value">${escapeHtml(infoHash)}</span></div>
-    <div class="detail-row"><span class="detail-label">Size</span><span class="detail-value">${formatSize(length)}</span></div>
-    <div class="detail-row"><span class="detail-label">Progress</span><span class="detail-value">${progress.toFixed(1)}%</span></div>
-    <div class="detail-row"><span class="detail-label">Download</span><span class="detail-value">${formatSpeed(downloadSpeed)}</span></div>
-    <div class="detail-row"><span class="detail-label">Upload</span><span class="detail-value">${formatSpeed(uploadSpeed)}</span></div>
-    <div class="detail-row"><span class="detail-label">Peers</span><span class="detail-value">${numPeers}</span></div>
-  `;
-
-  const filesEl = document.getElementById('details-files');
-  if (files.length === 0) {
-    filesEl.innerHTML = '<p class="detail-value">No file list yet (metadata may still be loading).</p>';
-  } else {
-    const rows = files.map((f) => {
-      const fProgress = Number.isFinite(f?.progress) ? f.progress : 0;
-      return `<tr><td class="file-name">${escapeHtml(f?.name || '—')}</td><td>${formatSize(f?.length ?? 0)}</td><td>${fProgress.toFixed(1)}%</td></tr>`;
-    }).join('');
-    filesEl.innerHTML = `<table><thead><tr><th>File</th><th>Size</th><th>Progress</th></tr></thead><tbody>${rows}</tbody></table>`;
-  }
-}
-
-function openModal() {
-  document.getElementById('details-modal').classList.add('is-open');
-  document.body.style.overflow = 'hidden';
-}
-
-function closeModal() {
-  document.getElementById('details-modal').classList.remove('is-open');
-  document.body.style.overflow = '';
-  detailsModalOpenFor = null;
-  if (detailsModalRefreshTimer) {
-    clearInterval(detailsModalRefreshTimer);
-    detailsModalRefreshTimer = null;
-  }
-}
+/* ═══════════════════════════════════════════════════════════════
+   Details modal
+════════════════════════════════════════════════════════════════ */
+let detailsOpenFor      = null;
+let detailsRefreshTimer = null;
 
 async function openDetails(infoHash) {
-  if (detailsModalRefreshTimer) {
-    clearInterval(detailsModalRefreshTimer);
-    detailsModalRefreshTimer = null;
-  }
+  if (detailsRefreshTimer) { clearInterval(detailsRefreshTimer); detailsRefreshTimer = null; }
   try {
-    const t = await fetchTorrentDetails(infoHash);
-    detailsModalOpenFor = infoHash;
-    populateDetailsModal(t);
-    openModal();
-    detailsModalRefreshTimer = setInterval(async () => {
-      if (detailsModalOpenFor !== infoHash) return;
-      try {
-        const updated = await fetchTorrentDetails(infoHash);
-        populateDetailsModal(updated);
-      } catch (_) {
-        closeModal();
-      }
+    const t = await fetch(`${API}/torrents/${encodeURIComponent(infoHash)}`).then(r => r.json());
+    detailsOpenFor = infoHash;
+    populateDetails(t);
+    document.getElementById('details-modal').classList.add('is-open');
+    document.body.style.overflow = 'hidden';
+    detailsRefreshTimer = setInterval(async () => {
+      if (detailsOpenFor !== infoHash) return;
+      try { populateDetails(await fetch(`${API}/torrents/${encodeURIComponent(infoHash)}`).then(r => r.json())); }
+      catch { closeDetailsModal(); }
     }, 2000);
   } catch (err) {
-    console.error('[openDetails] Failed to load torrent details', err);
-    showError(err.message || 'Could not load torrent details');
+    showError(err.message || 'Could not load details');
   }
 }
 
-function initModal() {
-  const modal = document.getElementById('details-modal');
-  const overlay = modal.querySelector('.modal-overlay');
-  const closeBtn = modal.querySelector('.modal-close');
-  overlay.addEventListener('click', closeModal);
-  closeBtn.addEventListener('click', closeModal);
-  modal.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
+function populateDetails(t) {
+  const progress = clamp(Number.isFinite(t?.progress) ? t.progress : 0, 0, 100);
+  document.getElementById('details-summary').innerHTML = `
+    <div class="detail-row">
+      <span class="detail-label">Name</span>
+      <span class="detail-value" style="font-family:var(--font)">${escapeHtml(t?.name ?? 'Unknown')}</span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Hash</span>
+      <span class="detail-value" style="font-size:11.5px;word-break:break-all">${escapeHtml(t?.infoHash ?? '—')}</span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Size</span>
+      <span class="detail-value">${formatSize(t?.length ?? 0)}</span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Done</span>
+      <span class="detail-value">${formatSize(t?.downloaded ?? 0)} (${progress.toFixed(2)}%)</span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Down</span>
+      <span class="detail-value">${formatSpeed(t?.downloadSpeed ?? 0)}</span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Up</span>
+      <span class="detail-value">${formatSpeed(t?.uploadSpeed ?? 0)}</span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Peers</span>
+      <span class="detail-value">${t?.numPeers ?? 0}</span>
+    </div>`;
+  document.getElementById('details-files').innerHTML = buildFilesTable(Array.isArray(t?.files) ? t.files : [], true);
 }
 
-function initPreviewModal() {
-  const modal = document.getElementById('preview-modal');
-  modal.querySelector('.modal-overlay').addEventListener('click', closePreviewModal);
-  modal.querySelector('.preview-modal-close').addEventListener('click', closePreviewModal);
-  modal.querySelector('.preview-cancel').addEventListener('click', closePreviewModal);
-  modal.querySelector('.preview-add').addEventListener('click', () => confirmAddFromPreview());
-  modal.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePreviewModal(); });
+function closeDetailsModal() {
+  document.getElementById('details-modal').classList.remove('is-open');
+  document.body.style.overflow = '';
+  detailsOpenFor = null;
+  if (detailsRefreshTimer) { clearInterval(detailsRefreshTimer); detailsRefreshTimer = null; }
 }
 
-// Tabs
-document.querySelectorAll('.tab').forEach((tab) => {
-  tab.addEventListener('click', () => {
-    const target = tab.dataset.tab;
-    document.querySelectorAll('.tab').forEach((t) => t.classList.remove('active'));
-    document.querySelectorAll('.tab-panel').forEach((p) => p.classList.remove('active'));
-    tab.classList.add('active');
-    const panel = document.getElementById(`panel-${target}`);
-    if (panel) panel.classList.add('active');
-  });
-});
+/* ═══════════════════════════════════════════════════════════════
+   Modal init
+════════════════════════════════════════════════════════════════ */
+function initModals() {
+  const previewModal = document.getElementById('preview-modal');
+  previewModal.querySelector('.modal-scrim').addEventListener('click', closePreviewModal);
+  previewModal.querySelector('.preview-modal-close').addEventListener('click', closePreviewModal);
+  previewModal.querySelector('.preview-cancel').addEventListener('click', closePreviewModal);
+  previewModal.querySelector('.preview-add').addEventListener('click', () => confirmPreview());
+  previewModal.addEventListener('keydown', e => { if (e.key === 'Escape') closePreviewModal(); });
 
+  const detailsModal = document.getElementById('details-modal');
+  detailsModal.querySelector('.modal-scrim').addEventListener('click', closeDetailsModal);
+  detailsModal.querySelector('.modal-close').addEventListener('click', closeDetailsModal);
+  detailsModal.addEventListener('keydown', e => { if (e.key === 'Escape') closeDetailsModal(); });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Preview loading state
+════════════════════════════════════════════════════════════════ */
 function setPreviewLoading(panel, loading) {
-  const loader = panel === 'magnet' ? document.getElementById('preview-loader-magnet') : document.getElementById('preview-loader-file');
-  const btn = panel === 'magnet' ? document.getElementById('btn-add-magnet') : document.getElementById('btn-add-file');
+  const loader = document.getElementById(`preview-loader-${panel}`);
+  const btn    = document.getElementById(`btn-add-${panel}`);
   if (loader) loader.classList.toggle('hidden', !loading);
   if (btn) {
     btn.disabled = loading;
-    btn.textContent = loading ? 'Loading…' : 'Add torrent';
+    if (loading) {
+      btn.innerHTML = `<div class="loader-dots" style="margin-right:6px"><span></span><span></span><span></span></div> Loading…`;
+    } else {
+      btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Add Torrent`;
+    }
   }
 }
 
-// Magnet form: preview first, then confirm to add
-document.getElementById('form-magnet').addEventListener('submit', async (e) => {
+/* ═══════════════════════════════════════════════════════════════
+   Form handlers
+════════════════════════════════════════════════════════════════ */
+document.getElementById('form-magnet').addEventListener('submit', async e => {
   e.preventDefault();
-  const textarea = document.getElementById('magnet');
-  const magnet = textarea.value?.trim();
-  if (!magnet) {
-    showError('Paste a magnet link first');
-    return;
-  }
+  const ta     = document.getElementById('magnet');
+  const magnet = ta.value.trim();
+  if (!magnet) { showError('Paste a magnet link first'); return; }
+
   setPreviewLoading('magnet', true);
   try {
-    const data = await fetchPreview(magnet);
+    const data = await fetchPreviewMagnet(magnet);
     setPreviewLoading('magnet', false);
-    showPreviewModal(data, async () => {
-      await addMagnet(magnet);
-      textarea.value = '';
-    });
+    openPreviewModal(data, async () => { await addMagnet(magnet); ta.value = ''; });
   } catch (err) {
     setPreviewLoading('magnet', false);
-    // eslint-disable-next-line no-console
-    console.error('[preview] Failed to get preview', err);
-    showError(err.message || 'Failed to get preview');
+    // Timeout: offer to add anyway
+    if (err.message.includes('timeout') || err.message.includes('Timeout')) {
+      openPreviewModal({ name: 'Unknown (metadata timeout)', length: 0, files: [] },
+        async () => { await addMagnet(magnet); ta.value = ''; });
+    } else {
+      showError(err.message || 'Failed to get preview');
+    }
   }
 });
 
-// File form: preview first, then confirm to add
-document.getElementById('form-file').addEventListener('submit', async (e) => {
+document.getElementById('form-file').addEventListener('submit', async e => {
   e.preventDefault();
   const input = e.target.querySelector('input[type="file"]');
-  const file = input.files?.[0];
-  if (!file) {
-    showError('Choose a .torrent file first');
-    return;
-  }
+  const file  = input.files?.[0];
+  if (!file) { showError('Choose a .torrent file first'); return; }
+
   setPreviewLoading('file', true);
   try {
     const data = await fetchPreviewFile(file);
     setPreviewLoading('file', false);
-    showPreviewModal(data, async () => {
+    openPreviewModal(data, async () => {
       await addFile(file);
       input.value = '';
-      e.target.querySelector('.file-text').textContent = 'Choose .torrent file';
+      document.getElementById('file-drop-title').textContent = 'Drop .torrent file here';
     });
   } catch (err) {
     setPreviewLoading('file', false);
-    // eslint-disable-next-line no-console
-    console.error('[preview] Failed to get preview', err);
-    showError(err.message || 'Failed to get preview');
+    showError(err.message || 'Failed to read file');
   }
 });
 
-const fileInput = document.querySelector('#form-file input[type="file"]');
-if (fileInput) {
-  fileInput.addEventListener('change', () => {
-    const label = document.querySelector('#form-file .file-text');
-    if (label) label.textContent = fileInput.files?.[0]?.name || 'Choose .torrent file';
-  });
+// File input label
+document.querySelector('#form-file input[type="file"]')?.addEventListener('change', function () {
+  const titleEl = document.getElementById('file-drop-title');
+  if (titleEl) titleEl.textContent = this.files?.[0]?.name || 'Drop .torrent file here';
+});
+
+// Drag-over styling for file drop zone
+const dropZone = document.getElementById('file-drop-zone');
+if (dropZone) {
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', () => dropZone.classList.remove('drag-over'));
 }
 
-initModal();
-initPreviewModal();
+/* ═══════════════════════════════════════════════════════════════
+   Theme
+════════════════════════════════════════════════════════════════ */
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  localStorage.setItem('theme', theme);
+  const label = document.getElementById('theme-label');
+  const sun   = document.getElementById('icon-sun');
+  const moon  = document.getElementById('icon-moon');
+  if (label) label.textContent = theme === 'dark' ? 'Light mode' : 'Dark mode';
+  if (sun)  sun.style.display  = theme === 'dark'  ? '' : 'none';
+  if (moon) moon.style.display = theme === 'light' ? '' : 'none';
+}
 
-// Poll every 2s
+document.getElementById('theme-toggle')?.addEventListener('click', () => {
+  const cur = document.documentElement.dataset.theme || 'dark';
+  applyTheme(cur === 'dark' ? 'light' : 'dark');
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   Tracker refresh
+════════════════════════════════════════════════════════════════ */
+document.getElementById('btn-trackers-refresh')?.addEventListener('click', async function () {
+  if (this.disabled) return;
+  this.disabled = true;
+  try {
+    const res = await fetch(`${API}/trackers/refresh`, { method: 'POST' });
+    const d = await res.json().catch(() => ({}));
+    if (res.ok) showToast(`Trackers refreshed (${d.count ?? '?'} loaded)`, 'success');
+    else throw new Error(d.error || 'Failed');
+  } catch (err) {
+    showError(err.message || 'Failed to refresh trackers');
+  } finally {
+    this.disabled = false;
+  }
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   Boot
+════════════════════════════════════════════════════════════════ */
+applyTheme(localStorage.getItem('theme') || 'dark');
+initModals();
 poll();
-setInterval(poll, 2000);
+setInterval(poll, 2500);
