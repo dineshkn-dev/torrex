@@ -62,10 +62,32 @@ const IC = {
   peers:  `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
   retry:  `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>`,
   info:   `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,
+  folder: `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,
   trash:  `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>`,
   stopSeed: `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><rect x="9" y="9" width="6" height="6"/></svg>`,
   resumeSeed: `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>`,
 };
+
+function cardActionsHtml({ isFailed, isSeeding }) {
+  return `
+    <div class="action-cluster action-cluster-main">
+      ${isFailed
+        ? `<button class="action-btn action-btn-priority retry-btn">${IC.retry} Retry</button>`
+        : `<button class="action-btn action-btn-priority details-btn">${IC.info} Details</button>`
+      }
+      <button class="action-btn action-btn-quiet open-folder-btn">${IC.folder} Open folder</button>
+    </div>
+    <div class="action-cluster action-cluster-state">
+      ${isSeeding && !isFailed
+        ? `<button class="action-btn action-btn-state stop-seed-btn">${IC.stopSeed} Stop seeding</button>`
+        : `<span class="seed-state-chip">Seeding off</span>`
+      }
+    </div>
+    <div class="action-cluster action-cluster-danger">
+      <button class="action-btn action-btn-danger remove-btn">${IC.trash} Remove</button>
+    </div>
+  `;
+}
 
 /* ═══════════════════════════════════════════════════════════════
    Card rendering
@@ -131,19 +153,7 @@ function renderTorrent(t) {
 
     <div class="card-footer">
       <div class="card-actions-default card-actions">
-        ${isFailed
-          ? `<button class="action-btn retry-btn">${IC.retry} Retry</button>`
-          : ''
-        }
-        ${!isFailed
-          ? `<button class="action-btn details-btn">${IC.info} Details</button>`
-          : ''
-        }
-        <button class="action-btn open-folder-btn">${IC.info} Open folder</button>
-        ${isSeeding && !isFailed
-          ? `<button class="action-btn stop-seed-btn">${IC.stopSeed} Stop seeding</button>`
-          : `<button class="action-btn" disabled>Seeding stopped</button>`}
-        <button class="action-btn remove-btn">${IC.trash} Remove</button>
+        ${cardActionsHtml({ isFailed, isSeeding })}
       </div>
 
       <div class="confirm-remove-row card-actions">
@@ -249,11 +259,10 @@ function updateCardInPlace(card, t) {
   if (!card.classList.contains('confirming-remove')) {
     const actionsContainer = card.querySelector('.card-actions-default');
     if (actionsContainer) {
-      const currentButtons = actionsContainer.querySelectorAll('.action-btn');
+      const currentButtons = Array.from(actionsContainer.querySelectorAll('.action-btn'));
       const hasRetry = currentButtons.some(btn => btn.classList.contains('retry-btn'));
       const hasDetails = currentButtons.some(btn => btn.classList.contains('details-btn'));
       const hasStopSeed = currentButtons.some(btn => btn.classList.contains('stop-seed-btn'));
-      const hasResumeSeed = currentButtons.some(btn => btn.classList.contains('resume-seed-btn'));
       
       const shouldHaveRetry = isFailed;
       const shouldHaveDetails = !isFailed;
@@ -261,24 +270,8 @@ function updateCardInPlace(card, t) {
 
       if (hasRetry !== shouldHaveRetry || hasDetails !== shouldHaveDetails || 
           hasStopSeed !== shouldHaveStopSeed) {
-        // Regenerate actions HTML
-        actionsContainer.innerHTML = `
-          ${shouldHaveRetry
-            ? `<button class="action-btn retry-btn">${IC.retry} Retry</button>`
-            : ''
-          }
-          ${shouldHaveDetails
-            ? `<button class="action-btn details-btn">${IC.info} Details</button>`
-            : ''
-          }
-          ${shouldHaveStopSeed
-            ? `<button class="action-btn stop-seed-btn">${IC.stopSeed} Stop seeding</button>`
-            : `<button class="action-btn" disabled>Seeding stopped</button>`
-          }
-          <button class="action-btn remove-btn">${IC.trash} Remove</button>
-        `;
+        actionsContainer.innerHTML = cardActionsHtml({ isFailed, isSeeding });
         
-        // Re-attach event listeners
         const retryBtn = actionsContainer.querySelector('.retry-btn');
         if (retryBtn) retryBtn.addEventListener('click', e => {
           e.stopPropagation();
@@ -295,6 +288,12 @@ function updateCardInPlace(card, t) {
         if (stopSeedBtn) stopSeedBtn.addEventListener('click', e => {
           e.stopPropagation();
           stopSeeding(t.infoHash);
+        });
+
+        const openFolderBtn = actionsContainer.querySelector('.open-folder-btn');
+        if (openFolderBtn) openFolderBtn.addEventListener('click', e => {
+          e.stopPropagation();
+          openInExplorer(t.infoHash);
         });
         
         // (Resume seeding is intentionally not offered in this mode)
