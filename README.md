@@ -1,65 +1,76 @@
-# Torrent Downloader Web App
+# Torrex - Local Torrent Downloader
 
-A simple, local-only web app to download torrents via **magnet links** or **.torrent files**. Runs on your machine and saves files into a `downloads` folder.
+A Node.js + WebTorrent app with a modern browser UI for downloading torrents from magnet links or .torrent files.
 
-## Features
+## What it does
 
-- Add torrents via **magnet link** (paste and click Add)
-- Add torrents via **.torrent file** upload
-- **Details modal** — click **Details** on any torrent to see name, info hash, size, progress, speed, peers, and a full file list (refreshes every 2s while open)
-- Live progress (%, speed, peers) for each download
-- **Persistence** — torrent list is saved to `state.json`; after a restart the app restores and resumes all torrents (partial downloads continue from where they left off)
-- Remove torrents from the list (files on disk are kept unless you change the API call)
-- Dark UI with minimal dependencies
+- Add torrents using a magnet link or file upload.
+- Preview metadata before adding (name, size, file list).
+- Track live progress, speeds, and peers.
+- Filter by folders in the sidebar: `All`, `In Progress`, `Completed`, `Failed`, `Seeding Off`.
+- Select multiple torrents and run bulk actions.
+- Stop/resume seeding per torrent or in bulk.
+- Open a torrent folder directly in Finder/Explorer.
+- Persist torrent state across restarts via `state.json`.
+- Change download directory from the UI (`config.json` is updated).
 
 ## Requirements
 
-- **Node.js** 18+ (or 16+)
+- Node.js 18+
+- npm
 
-## Setup & run
+## Quick start
 
-1. Install dependencies:
+```bash
+npm install
+npm start
+```
 
-   ```bash
-   npm install
-   ```
+Open: `http://localhost:3000`
 
-2. Start the server:
+## Keyboard shortcuts
 
-   ```bash
-   npm start
-   ```
+- `Cmd+A` / `Ctrl+A`: Select all visible torrents
+- `Arrow Up` / `Arrow Down`: Move card focus
+- `Shift + Arrow Up/Down`: Extend selection while moving focus
+- `Esc`: Close shortcuts panel, then clear selection/focus
+- `?`: Open keyboard shortcuts help
 
-3. Open in browser:
+## Project structure
 
-   **http://localhost:3000**
+- `server.js`: Express API + WebTorrent engine
+- `public/index.html`: App shell and modal markup
+- `public/app.js`: Frontend behavior and API interactions
+- `public/styles.css`: Styling
+- `config.json`: Current download directory
+- `state.json`: Persisted torrent/seeding state
+- `downloads/`: Download output location
+- `tmp/`: Temporary upload/preview files
 
-4. Downloads are saved to:
+## API overview
 
-   **`./downloads`** (created automatically next to `server.js`)
+- `GET /api/torrents`
+- `GET /api/torrents/:hash`
+- `POST /api/torrents/preview`
+- `POST /api/torrents/preview/file`
+- `POST /api/torrents`
+- `POST /api/torrents/file`
+- `DELETE /api/torrents/:hash`
+- `POST /api/torrents/:hash/retry`
+- `POST /api/torrents/:hash/stop-seeding`
+- `POST /api/torrents/:hash/resume-seeding`
+- `POST /api/torrents/:hash/open`
+- `GET /api/fs/browse`
+- `GET /api/config`
+- `PATCH /api/config`
+- `GET /api/test-torrents`
 
-## Usage
+## Security and usage notes
 
-- **Magnet**: Paste a `magnet:?xt=urn:btih:...` link in the text area and click **Add torrent**.
-- **File**: Switch to “.torrent file”, choose a file, then click **Add torrent**.
-- Click **Details** on a torrent to open a modal with connection/stats and the list of files.
-- The list refreshes every couple of seconds; you can remove a torrent with **Remove** (this only removes it from the app, not the files from disk).
-- After restarting the server, open the app again — your torrent list is restored and downloads resume automatically.
+- This is a local utility app; do not expose it publicly without authentication and network hardening.
+- Use only content you are authorized to download/share.
+- For very large or long-running torrent workloads, a dedicated desktop client may be more suitable.
 
-## Tech
+## License
 
-- **Backend**: Node.js, Express, **WebTorrent**, Multer (for file uploads)
-- **Frontend**: Vanilla HTML/CSS/JS, no build step
-
-## Engine & safety
-
-- **No third-party torrent engine or cloud.** The app uses [WebTorrent](https://webtorrent.io) as an npm library inside your own Node process. All downloading happens on your machine; no torrent data is sent to any external service.
-- **Runs 100% locally.** The server listens on your computer only. Don’t expose it to the internet (e.g. port forwarding or public hosting) without authentication.
-- **Open source.** WebTorrent is widely used and open source; you can audit the code.
-- Use only for content you are allowed to download.
-
-## Notes
-
-- Use only for content you are allowed to download.
-- WebTorrent connects to both normal BitTorrent peers and WebRTC peers where available; some torrents may have fewer peers than in a full desktop client.
-- For heavy use or very large torrents, a dedicated client (e.g. Transmission, qBittorrent) may be more suitable; this app is aimed at quick, local use.
+MIT (see `LICENSE`).
