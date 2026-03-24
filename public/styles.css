@@ -242,54 +242,10 @@ html[data-theme="light"] .sidebar {
 }
 
 /* Summary stats */
-.sidebar-summary {
-  display: flex;
-  align-items: stretch;
-  margin: 16px 14px 4px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  overflow: hidden;
-  flex-shrink: 0;
-}
-
-.sum-item {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 16px 8px;
-}
-
-.sum-val {
-  font-family: var(--mono);
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--text);
-  line-height: 1;
-  letter-spacing: -0.05em;
-}
-
-.sum-lbl {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-3);
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-}
-
-.sum-sep {
-  width: 1px;
-  background: var(--border);
-  flex-shrink: 0;
-}
-
 /* Speed panel */
 .speed-panel {
-  margin: 4px 14px 0;
-  padding: 12px 14px;
+  margin: 10px 14px;
+  padding: 10px 12px;
   border-radius: var(--r-md);
   background: var(--surface-2);
   border: 1px solid var(--border);
