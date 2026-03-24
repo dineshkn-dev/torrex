@@ -81,6 +81,31 @@
         </div>
       </div>
 
+      <!-- Sidebar folders -->
+      <div class="sidebar-folders">
+        <div class="folders-title">Folders</div>
+        <button class="folder-item is-active" data-folder-filter="all">
+          <span class="folder-name">All</span>
+          <span class="folder-count" id="folder-count-all">0</span>
+        </button>
+        <button class="folder-item" data-folder-filter="in-progress">
+          <span class="folder-name">In Progress</span>
+          <span class="folder-count" id="folder-count-in-progress">0</span>
+        </button>
+        <button class="folder-item" data-folder-filter="completed">
+          <span class="folder-name">Completed</span>
+          <span class="folder-count" id="folder-count-completed">0</span>
+        </button>
+        <button class="folder-item" data-folder-filter="failed">
+          <span class="folder-name">Failed</span>
+          <span class="folder-count" id="folder-count-failed">0</span>
+        </button>
+        <button class="folder-item" data-folder-filter="seeding-off">
+          <span class="folder-name">Seeding Off</span>
+          <span class="folder-count" id="folder-count-seeding-off">0</span>
+        </button>
+      </div>
+
       <!-- Sidebar footer -->
       <div class="sidebar-footer">
         <div class="engine-row">
@@ -135,13 +160,35 @@
             <h2 class="view-title">Downloads</h2>
             <span class="count-pill" id="count-badge" style="display:none">0</span>
           </div>
-          <button class="fab" id="fab-add" title="Add Torrent">
+          <div class="view-header-actions">
+            <button class="shortcuts-btn" id="btn-shortcuts" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="4" width="20" height="16" rx="2"/>
+                <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10"/>
+              </svg>
+            </button>
+            <button class="fab" id="fab-add" title="Add Torrent">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <line x1="12" y1="5" x2="12" y2="19"/>
               <line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
             Add
           </button>
+          </div><!-- /view-header-actions -->
+        </div><!-- /view-header -->
+
+        <div class="bulk-toolbar" id="bulk-toolbar" hidden>
+          <div class="bulk-left">
+            <span class="bulk-title"><strong id="bulk-selected-count">0</strong> selected</span>
+            <button class="bulk-link-btn" id="bulk-select-all-visible" type="button">Select visible</button>
+            <button class="bulk-link-btn" id="bulk-clear-selection" type="button">Clear</button>
+          </div>
+          <div class="bulk-actions">
+            <button class="action-btn action-btn-state" id="bulk-stop-seeding" type="button">Stop seeding</button>
+            <button class="action-btn action-btn-priority" id="bulk-resume-seeding" type="button">Resume seeding</button>
+            <button class="action-btn action-btn-priority" id="bulk-retry-failed" type="button">Retry failed</button>
+            <button class="action-btn action-btn-danger" id="bulk-remove" type="button">Remove selected</button>
+          </div>
         </div>
 
         <!-- Torrent list -->
@@ -161,8 +208,8 @@
               </svg>
             </div>
           </div>
-          <h3 class="empty-title">No downloads yet</h3>
-          <p class="empty-sub">Add a magnet link or drop a .torrent file to get started</p>
+          <h3 class="empty-title" id="empty-title">No downloads yet</h3>
+          <p class="empty-sub" id="empty-sub">Add a magnet link or drop a .torrent file to get started</p>
           <button class="btn btn-primary" id="empty-add-btn">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -391,6 +438,53 @@
           Files
         </div>
         <div id="details-files" class="file-list-wrap"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Keyboard shortcuts modal ═══ -->
+  <div id="shortcuts-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="shortcuts-modal-title">
+    <div class="modal-scrim"></div>
+    <div class="modal-panel shortcuts-panel">
+      <div class="modal-drag-handle"></div>
+      <div class="modal-header">
+        <h2 class="modal-title" id="shortcuts-modal-title">Keyboard Shortcuts</h2>
+        <button type="button" class="modal-close-btn shortcuts-close" aria-label="Close">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body shortcuts-body">
+        <div class="shortcut-group">
+          <div class="shortcut-group-title">Navigation</div>
+          <div class="shortcut-row">
+            <div class="shortcut-keys"><kbd>↑</kbd> <kbd>↓</kbd></div>
+            <span class="shortcut-desc">Move focus between torrents</span>
+          </div>
+          <div class="shortcut-row">
+            <div class="shortcut-keys"><kbd>Shift</kbd> <kbd>↑</kbd> / <kbd>↓</kbd></div>
+            <span class="shortcut-desc">Navigate and extend selection</span>
+          </div>
+        </div>
+        <div class="shortcut-group">
+          <div class="shortcut-group-title">Selection</div>
+          <div class="shortcut-row">
+            <div class="shortcut-keys"><kbd>⌘ A</kbd> <span class="shortcut-sep">/</span> <kbd>Ctrl A</kbd></div>
+            <span class="shortcut-desc">Select all visible torrents</span>
+          </div>
+          <div class="shortcut-row">
+            <div class="shortcut-keys"><kbd>Esc</kbd></div>
+            <span class="shortcut-desc">Clear selection or focus</span>
+          </div>
+        </div>
+        <div class="shortcut-group">
+          <div class="shortcut-group-title">General</div>
+          <div class="shortcut-row">
+            <div class="shortcut-keys"><kbd>?</kbd></div>
+            <span class="shortcut-desc">Open this shortcuts panel</span>
+          </div>
+        </div>
       </div>
     </div>
   </div>

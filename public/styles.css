@@ -288,7 +288,7 @@ html[data-theme="light"] .sidebar {
 
 /* Speed panel */
 .speed-panel {
-  margin: 4px 14px auto;
+  margin: 4px 14px 0;
   padding: 12px 14px;
   border-radius: var(--r-md);
   background: var(--surface-2);
@@ -328,6 +328,83 @@ html[data-theme="light"] .sidebar {
   font-size: 12px;
   font-weight: 600;
   color: var(--text);
+}
+
+/* Sidebar folders */
+.sidebar-folders {
+  margin: 10px 14px auto;
+  padding: 10px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.folders-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin: 1px 4px 6px;
+}
+
+.folder-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: var(--r-xs);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+  transition: background .15s var(--ease), color .15s var(--ease), border-color .15s var(--ease);
+}
+
+.folder-item:hover {
+  background: var(--surface-3);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.folder-item.is-active {
+  background: var(--accent-tint);
+  color: var(--accent-2);
+  border-color: rgba(var(--accent-rgb), 0.28);
+}
+
+.folder-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-count {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: inherit;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+html[data-theme="light"] .folder-count {
+  background: rgba(0,0,0,0.03);
 }
 
 /* Sidebar footer */
@@ -572,6 +649,55 @@ html[data-theme="light"] .view-header {
   gap: 10px;
 }
 
+.bulk-toolbar {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-2);
+  border-radius: var(--r-sm);
+  background: rgba(99, 102, 241, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.bulk-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.bulk-title {
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.bulk-link-btn {
+  color: var(--accent-2);
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+
+.bulk-link-btn:hover {
+  background: var(--accent-tint);
+}
+
+.bulk-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.bulk-actions .action-btn {
+  width: auto;
+  padding: 0 10px;
+}
+
 .view-title {
   font-size: 24px;
   font-weight: 800;
@@ -631,6 +757,25 @@ html[data-theme="light"] .view-header {
   box-shadow: none;
 }
 
+.shortcuts-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-3);
+  transition: color .15s var(--ease), background .15s var(--ease), border-color .15s var(--ease);
+  flex-shrink: 0;
+}
+.shortcuts-btn:hover {
+  background: var(--surface-3);
+  border-color: var(--border-2);
+  color: var(--text-2);
+}
+
 /* ═══════════════════════════════════════════════════════════════
    Torrent List
 ════════════════════════════════════════════════════════════════ */
@@ -668,41 +813,12 @@ html[data-theme="light"] .view-header {
   transform: translateY(-2px);
 }
 
-/* ─── Card state accent bar ─────────────────────────────────── */
-.torrent-card::before {
-  content: '';
-  position: absolute;
-  left: 0; top: 0; bottom: 0;
-  width: 3px;
-  border-radius: 3px 0 0 3px;
-  z-index: 1;
-}
-
-/* Active downloading */
-.torrent-card:not(.done):not(.failed)::before {
-  background: linear-gradient(180deg, #6366f1 0%, #8b5cf6 50%, #a78bfa 100%);
-  animation: barPulse 2.5s ease-in-out infinite;
-}
-
-@keyframes barPulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.35; }
-}
-
 /* Done */
-.torrent-card.done::before {
-  background: linear-gradient(180deg, var(--green) 0%, #34d399 100%);
-  animation: none;
-}
 .torrent-card.done {
   border-color: rgba(16,185,129,0.18);
 }
 
 /* Failed */
-.torrent-card.failed::before {
-  background: var(--red);
-  animation: none;
-}
 .torrent-card.failed {
   border-color: rgba(239,68,68,0.18);
 }
@@ -715,9 +831,49 @@ html[data-theme="light"] .view-header {
 /* ─── Card top row ──────────────────────────────────────────── */
 .card-top {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
   margin-bottom: 8px;
+}
+
+.card-select {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.card-select-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.card-select-box {
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  border: 1px solid var(--border-2);
+  background: var(--surface-2);
+  display: block;
+  transition: background .15s var(--ease), border-color .15s var(--ease);
+}
+
+.card-select-input:checked + .card-select-box {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,0.85);
+}
+
+.torrent-card.is-selected {
+  border-color: rgba(var(--accent-rgb), 0.45);
+  box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.22), 0 8px 24px rgba(0,0,0,0.22);
+}
+
+.torrent-card.is-keyboard-focused {
+  outline: 2px solid rgba(var(--accent-rgb), 0.7);
+  outline-offset: 1px;
 }
 
 .card-name {
@@ -971,8 +1127,10 @@ html[data-theme="light"] .view-header {
 .action-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 5px;
-  padding: 4px 8px;
+  padding: 0;
+  width: 28px;
   border-radius: var(--r-xs);
   font-size: 11px;
   font-weight: 600;
@@ -982,8 +1140,10 @@ html[data-theme="light"] .view-header {
   transition: color .15s var(--ease), background .15s var(--ease), border-color .15s var(--ease), transform .15s var(--ease);
   height: 28px;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 .action-btn:hover { background: var(--surface-3); color: var(--text); border-color: var(--border-2); }
+.action-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .action-btn svg { flex-shrink: 0; }
 
 .action-btn-priority {
@@ -1027,10 +1187,12 @@ html[data-theme="light"] .view-header {
   background: var(--red);
   color: #fff;
   border-color: transparent;
+  width: auto;
+  padding: 0 10px;
 }
 .action-btn.confirm-remove-btn:hover { background: #dc2626; color: #fff; }
 
-.action-btn.cancel-remove-btn { color: var(--text-3); background: transparent; border-color: transparent; }
+.action-btn.cancel-remove-btn { color: var(--text-3); background: transparent; border-color: transparent; width: auto; padding: 0 8px; }
 .action-btn.cancel-remove-btn:hover { color: var(--text-2); background: var(--surface-3); }
 
 .seed-state-chip {
@@ -1654,4 +1816,103 @@ html[data-theme="light"] .file-list-wrap tr:hover td { background: rgba(0,0,0,0.
 html[data-theme="light"] .toast {
   background: var(--surface);
   border-color: var(--border-2);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   View-header actions group
+════════════════════════════════════════════════════════════════ */
+.view-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Keyboard focused card
+════════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════
+   Shortcuts modal
+════════════════════════════════════════════════════════════════ */
+.shortcuts-panel {
+  max-width: 460px;
+  width: 100%;
+}
+
+.shortcuts-body {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 20px 24px;
+}
+
+.shortcut-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.shortcut-group-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  margin-bottom: 8px;
+}
+
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.shortcut-row:last-child {
+  border-bottom: none;
+}
+
+.shortcut-keys {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.shortcut-desc {
+  font-size: 12.5px;
+  color: var(--text-2);
+  text-align: right;
+}
+
+.shortcut-sep {
+  font-size: 11px;
+  color: var(--text-3);
+  padding: 0 2px;
+}
+
+kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  padding: 3px 7px;
+  border-radius: 5px;
+  background: var(--surface-3);
+  border: 1px solid var(--border-2);
+  border-bottom-width: 2px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-2);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+html[data-theme="light"] kbd {
+  background: #fff;
+  border-color: #d1d5db;
+  color: #374151;
 }

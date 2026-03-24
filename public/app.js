@@ -1,6 +1,214 @@
 'use strict';
 
 const API = '/api';
+const FOLDER_FILTER_STORAGE_KEY = 'torrex.activeFolderFilter';
+
+let activeFolderFilter = 'all';
+let latestTorrentList = [];
+let latestVisibleList = [];
+const selectedInfoHashes = new Set();
+let focusedCardIndex = -1;
+
+function getSelectedTorrents() {
+  if (!latestTorrentList.length || !selectedInfoHashes.size) return [];
+  return latestTorrentList.filter(t => selectedInfoHashes.has(t.infoHash));
+}
+
+function pruneSelection() {
+  const valid = new Set(latestTorrentList.map(t => t.infoHash));
+  [...selectedInfoHashes].forEach(hash => {
+    if (!valid.has(hash)) selectedInfoHashes.delete(hash);
+  });
+}
+
+function syncCardSelectionState(card, hash) {
+  const selected = selectedInfoHashes.has(hash);
+  card.classList.toggle('is-selected', selected);
+  const input = card.querySelector('.card-select-input');
+  if (input) input.checked = selected;
+}
+
+function updateBulkToolbar() {
+  const bar = document.getElementById('bulk-toolbar');
+  if (!bar) return;
+
+  const selected = getSelectedTorrents();
+  const totalSelected = selected.length;
+
+  const selectedCount = document.getElementById('bulk-selected-count');
+  if (selectedCount) selectedCount.textContent = totalSelected;
+
+  bar.hidden = totalSelected === 0;
+
+  const inProgress = selected.filter(t => !t.done && !t.failed).length;
+  const completedNoSeed = selected.filter(t => t.done && t.seeding === false).length;
+  const failed = selected.filter(t => t.failed).length;
+
+  const btnStop = document.getElementById('bulk-stop-seeding');
+  const btnResume = document.getElementById('bulk-resume-seeding');
+  const btnRetry = document.getElementById('bulk-retry-failed');
+  const btnRemove = document.getElementById('bulk-remove');
+  const btnSelectAll = document.getElementById('bulk-select-all-visible');
+
+  if (btnStop) btnStop.disabled = inProgress === 0;
+  if (btnResume) btnResume.disabled = completedNoSeed === 0;
+  if (btnRetry) btnRetry.disabled = failed === 0;
+  if (btnRemove) btnRemove.disabled = totalSelected === 0;
+  if (btnSelectAll) btnSelectAll.disabled = latestVisibleList.length === 0;
+}
+
+function clearSelection() {
+  selectedInfoHashes.clear();
+  document.querySelectorAll('.torrent-card[data-info-hash]').forEach(card => {
+    syncCardSelectionState(card, card.dataset.infoHash || '');
+  });
+  updateBulkToolbar();
+}
+
+function selectAllVisible() {
+  latestVisibleList.forEach(t => selectedInfoHashes.add(t.infoHash));
+  document.querySelectorAll('.torrent-card[data-info-hash]').forEach(card => {
+    syncCardSelectionState(card, card.dataset.infoHash || '');
+  });
+  updateBulkToolbar();
+}
+
+const EMPTY_STATE_COPY = {
+  all: {
+    title: 'No downloads yet',
+    sub: 'Add a magnet link or drop a .torrent file to get started',
+    buttonLabel: 'Add your first torrent',
+    action: 'add',
+  },
+  'in-progress': {
+    title: 'Nothing in progress',
+    sub: 'All torrents are either completed or not started yet.',
+    buttonLabel: 'Show all torrents',
+    action: 'show-all',
+  },
+  completed: {
+    title: 'No completed torrents',
+    sub: 'Completed downloads will appear here.',
+    buttonLabel: 'Show all torrents',
+    action: 'show-all',
+  },
+  failed: {
+    title: 'No failed torrents',
+    sub: 'Failed downloads will be listed here for quick retry.',
+    buttonLabel: 'Show all torrents',
+    action: 'show-all',
+  },
+  'seeding-off': {
+    title: 'Nothing with seeding off',
+    sub: 'Completed torrents with seeding disabled will appear here.',
+    buttonLabel: 'Show all torrents',
+    action: 'show-all',
+  },
+};
+
+function updateEmptyStateContent(visibleList) {
+  const titleEl = document.getElementById('empty-title');
+  const subEl   = document.getElementById('empty-sub');
+  const btn     = document.getElementById('empty-add-btn');
+  if (!titleEl || !subEl || !btn) return;
+
+  const key = (visibleList.length === 0 ? activeFolderFilter : 'all');
+  const copy = EMPTY_STATE_COPY[key] ?? EMPTY_STATE_COPY.all;
+
+  titleEl.textContent = copy.title;
+  subEl.textContent = copy.sub;
+
+  const textNode = btn.childNodes[btn.childNodes.length - 1];
+  if (textNode && textNode.nodeType === Node.TEXT_NODE) {
+    textNode.textContent = ` ${copy.buttonLabel}`;
+  }
+
+  btn.dataset.action = copy.action;
+  btn.classList.toggle('btn-primary', copy.action === 'add');
+  btn.classList.toggle('btn-ghost', copy.action !== 'add');
+}
+
+function initEmptyStateButtonBehavior() {
+  const btn = document.getElementById('empty-add-btn');
+  if (!btn) return;
+  btn.addEventListener('click', (e) => {
+    if (btn.dataset.action !== 'show-all') return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    setActiveFolderFilter('all');
+  }, true);
+}
+
+function filterTorrentsByFolder(list, filter) {
+  switch (filter) {
+    case 'in-progress':
+      return list.filter(t => !t.done && !t.failed);
+    case 'completed':
+      return list.filter(t => !!t.done);
+    case 'failed':
+      return list.filter(t => !!t.failed);
+    case 'seeding-off':
+      return list.filter(t => !!t.done && t.seeding === false);
+    case 'all':
+    default:
+      return list;
+  }
+}
+
+function updateFolderCounts(list) {
+  const counts = {
+    all: list.length,
+    'in-progress': list.filter(t => !t.done && !t.failed).length,
+    completed: list.filter(t => !!t.done).length,
+    failed: list.filter(t => !!t.failed).length,
+    'seeding-off': list.filter(t => !!t.done && t.seeding === false).length,
+  };
+
+  const map = {
+    all: 'folder-count-all',
+    'in-progress': 'folder-count-in-progress',
+    completed: 'folder-count-completed',
+    failed: 'folder-count-failed',
+    'seeding-off': 'folder-count-seeding-off',
+  };
+
+  Object.entries(map).forEach(([key, id]) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = counts[key];
+  });
+}
+
+function updateFolderActiveState() {
+  document.querySelectorAll('.folder-item[data-folder-filter]').forEach(btn => {
+    btn.classList.toggle('is-active', btn.dataset.folderFilter === activeFolderFilter);
+  });
+}
+
+function normalizeFolderFilter(filter) {
+  return Object.prototype.hasOwnProperty.call(EMPTY_STATE_COPY, filter) ? filter : 'all';
+}
+
+function setActiveFolderFilter(filter) {
+  activeFolderFilter = normalizeFolderFilter(filter || 'all');
+  focusedCardIndex = -1;
+  try {
+    localStorage.setItem(FOLDER_FILTER_STORAGE_KEY, activeFolderFilter);
+  } catch {}
+  updateFolderActiveState();
+  renderList(latestTorrentList);
+}
+
+function initFolderFilters() {
+  try {
+    const saved = localStorage.getItem(FOLDER_FILTER_STORAGE_KEY);
+    if (saved) activeFolderFilter = normalizeFolderFilter(saved);
+  } catch {}
+
+  document.querySelectorAll('.folder-item[data-folder-filter]').forEach(btn => {
+    btn.addEventListener('click', () => setActiveFolderFilter(btn.dataset.folderFilter || 'all'));
+  });
+  updateFolderActiveState();
+}
 
 /* ═══════════════════════════════════════════════════════════════
    Utilities
@@ -72,19 +280,19 @@ function cardActionsHtml({ isFailed, isSeeding }) {
   return `
     <div class="action-cluster action-cluster-main">
       ${isFailed
-        ? `<button class="action-btn action-btn-priority retry-btn">${IC.retry} Retry</button>`
-        : `<button class="action-btn action-btn-priority details-btn">${IC.info} Details</button>`
+        ? `<button class="action-btn action-btn-priority retry-btn" title="Retry">${IC.retry}</button>`
+        : `<button class="action-btn action-btn-priority details-btn" title="Details">${IC.info}</button>`
       }
-      <button class="action-btn action-btn-quiet open-folder-btn">${IC.folder} Open folder</button>
+      <button class="action-btn action-btn-quiet open-folder-btn" title="Open folder">${IC.folder}</button>
     </div>
     <div class="action-cluster action-cluster-state">
       ${isSeeding && !isFailed
-        ? `<button class="action-btn action-btn-state stop-seed-btn">${IC.stopSeed} Stop seeding</button>`
+        ? `<button class="action-btn action-btn-state stop-seed-btn" title="Stop seeding">${IC.stopSeed}</button>`
         : `<span class="seed-state-chip">Seeding off</span>`
       }
     </div>
     <div class="action-cluster action-cluster-danger">
-      <button class="action-btn action-btn-danger remove-btn">${IC.trash} Remove</button>
+      <button class="action-btn action-btn-danger remove-btn" title="Remove">${IC.trash}</button>
     </div>
   `;
 }
@@ -128,6 +336,10 @@ function renderTorrent(t) {
   card.innerHTML = `
     <div class="card-body">
       <div class="card-top">
+        <label class="card-select" title="Select torrent">
+          <input type="checkbox" class="card-select-input" aria-label="Select torrent" />
+          <span class="card-select-box"></span>
+        </label>
         <p class="card-name">${escapeHtml(t?.name || 'Connecting…')}</p>
         <span class="card-badge ${badgeClass}">
           <span class="badge-dot"></span>${badgeLabel}
@@ -163,6 +375,16 @@ function renderTorrent(t) {
       </div>
     </div>
   `;
+
+  syncCardSelectionState(card, t.infoHash);
+
+  card.querySelector('.card-select-input')?.addEventListener('change', e => {
+    const checked = !!e.target.checked;
+    if (checked) selectedInfoHashes.add(t.infoHash);
+    else selectedInfoHashes.delete(t.infoHash);
+    syncCardSelectionState(card, t.infoHash);
+    updateBulkToolbar();
+  });
 
   // Retry
   card.querySelector('.retry-btn')?.addEventListener('click', e => {
@@ -255,6 +477,8 @@ function updateCardInPlace(card, t) {
   if (svUl)    svUl.textContent    = formatSpeed(ulSpeed);
   if (svPeers) svPeers.textContent = `${numPeers} peers`;
 
+  syncCardSelectionState(card, t.infoHash);
+
   // Update card actions if status changed
   if (!card.classList.contains('confirming-remove')) {
     const actionsContainer = card.querySelector('.card-actions-default');
@@ -317,6 +541,12 @@ function updateCardInPlace(card, t) {
    Render list (DOM diff — no full re-render)
 ════════════════════════════════════════════════════════════════ */
 function renderList(list) {
+  latestTorrentList = Array.isArray(list) ? list : [];
+  pruneSelection();
+  updateFolderCounts(latestTorrentList);
+
+  const visibleList = filterTorrentsByFolder(latestTorrentList, activeFolderFilter);
+  latestVisibleList = visibleList;
   const container  = document.getElementById('torrent-list');
   const emptyState = document.getElementById('empty-state');
 
@@ -328,7 +558,7 @@ function renderList(list) {
 
   // Remove stale cards
   existing.forEach((el, hash) => {
-    if (!list.some(t => t.infoHash === hash)) {
+    if (!visibleList.some(t => t.infoHash === hash)) {
       el.style.animation = 'none';
       el.style.transition = 'opacity .2s, transform .2s';
       el.style.opacity = '0';
@@ -338,7 +568,7 @@ function renderList(list) {
   });
 
   // Update or insert
-  list.forEach((t, idx) => {
+  visibleList.forEach((t, idx) => {
     const existingCard = existing.get(t.infoHash);
     if (existingCard) {
       updateCardInPlace(existingCard, t);
@@ -353,11 +583,12 @@ function renderList(list) {
   });
 
   // Empty state
-  if (emptyState) emptyState.classList.toggle('show', list.length === 0);
+  if (emptyState) emptyState.classList.toggle('show', visibleList.length === 0);
+  updateEmptyStateContent(visibleList);
 
   // Active count badge (main header)
   const badge = document.getElementById('count-badge');
-  const active = list.filter(t => !t.done && !t.failed).length;
+  const active = visibleList.filter(t => !t.done && !t.failed).length;
   if (badge) {
     badge.textContent = active;
     badge.style.display = active > 0 ? 'flex' : 'none';
@@ -367,11 +598,13 @@ function renderList(list) {
   const statActive = document.getElementById('stat-active');
   const statDone   = document.getElementById('stat-done');
   const statTotal  = document.getElementById('stat-total');
-  if (statActive) statActive.textContent = active;
-  if (statDone)   statDone.textContent   = list.filter(t => t.done).length;
-  if (statTotal)  statTotal.textContent  = list.length;
+  if (statActive) statActive.textContent = latestTorrentList.filter(t => !t.done && !t.failed).length;
+  if (statDone)   statDone.textContent   = latestTorrentList.filter(t => t.done).length;
+  if (statTotal)  statTotal.textContent  = latestTorrentList.length;
 
-  updateSpeeds(list);
+  updateSpeeds(latestTorrentList);
+  updateBulkToolbar();
+  syncFocusedCardAfterRender();
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -465,6 +698,91 @@ async function openInExplorer(infoHash) {
   } catch (err) {
     showError(err.message || 'Failed to open folder');
   }
+}
+
+async function runBulkAction(targets, requestFn, successLabel) {
+  if (!targets.length) return;
+
+  const results = await Promise.allSettled(targets.map(t => requestFn(t.infoHash)));
+  const ok = results.filter(r => r.status === 'fulfilled').length;
+  const failed = results.length - ok;
+
+  if (ok > 0) {
+    showToast(`${successLabel}: ${ok} torrent${ok === 1 ? '' : 's'}`, 'success');
+  }
+  if (failed > 0) {
+    showError(`${failed} action${failed === 1 ? '' : 's'} failed`);
+  }
+
+  poll();
+}
+
+function requestStopSeeding(infoHash) {
+  return fetch(`${API}/torrents/${encodeURIComponent(infoHash)}/stop-seeding`, { method: 'POST' })
+    .then(async (res) => {
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Failed to stop seeding');
+      }
+    });
+}
+
+function requestResumeSeeding(infoHash) {
+  return fetch(`${API}/torrents/${encodeURIComponent(infoHash)}/resume-seeding`, { method: 'POST' })
+    .then(async (res) => {
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Failed to resume seeding');
+      }
+    });
+}
+
+function requestRetry(infoHash) {
+  return fetch(`${API}/torrents/${encodeURIComponent(infoHash)}/retry`, { method: 'POST' })
+    .then(async (res) => {
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Failed to retry');
+      }
+    });
+}
+
+function requestRemove(infoHash) {
+  return fetch(`${API}/torrents/${encodeURIComponent(infoHash)}`, { method: 'DELETE' })
+    .then(async (res) => {
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Failed to remove');
+      }
+    });
+}
+
+function initBulkActions() {
+  document.getElementById('bulk-select-all-visible')?.addEventListener('click', selectAllVisible);
+  document.getElementById('bulk-clear-selection')?.addEventListener('click', clearSelection);
+
+  document.getElementById('bulk-stop-seeding')?.addEventListener('click', async () => {
+    const targets = getSelectedTorrents().filter(t => !t.done && !t.failed);
+    await runBulkAction(targets, requestStopSeeding, 'Stopped seeding');
+  });
+
+  document.getElementById('bulk-resume-seeding')?.addEventListener('click', async () => {
+    const targets = getSelectedTorrents().filter(t => t.done && t.seeding === false);
+    await runBulkAction(targets, requestResumeSeeding, 'Resumed seeding');
+  });
+
+  document.getElementById('bulk-retry-failed')?.addEventListener('click', async () => {
+    const targets = getSelectedTorrents().filter(t => t.failed);
+    await runBulkAction(targets, requestRetry, 'Retry started');
+  });
+
+  document.getElementById('bulk-remove')?.addEventListener('click', async () => {
+    const targets = getSelectedTorrents();
+    await runBulkAction(targets, requestRemove, 'Removed');
+    clearSelection();
+  });
+
+  updateBulkToolbar();
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -942,10 +1260,126 @@ document.getElementById('btn-test-torrents')?.addEventListener('click', async fu
 });
 
 /* ═══════════════════════════════════════════════════════════════
+   Keyboard shortcuts
+════════════════════════════════════════════════════════════════ */
+function isTypingContext() {
+  const el = document.activeElement;
+  if (!el) return false;
+  const tag = el.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+}
+
+function isAnyModalOpen() {
+  return !!document.querySelector('.modal.is-open');
+}
+
+function syncFocusedCardAfterRender() {
+  document.querySelectorAll('.torrent-card.is-keyboard-focused').forEach(c => c.classList.remove('is-keyboard-focused'));
+  if (focusedCardIndex >= latestVisibleList.length) focusedCardIndex = latestVisibleList.length - 1;
+  if (focusedCardIndex >= 0 && focusedCardIndex < latestVisibleList.length) {
+    const t = latestVisibleList[focusedCardIndex];
+    const card = document.querySelector(`.torrent-card[data-info-hash="${t.infoHash}"]`);
+    if (card) card.classList.add('is-keyboard-focused');
+  }
+}
+
+function setFocusedCard(index) {
+  document.querySelectorAll('.torrent-card.is-keyboard-focused').forEach(c => c.classList.remove('is-keyboard-focused'));
+  focusedCardIndex = index;
+  if (index >= 0 && index < latestVisibleList.length) {
+    const t = latestVisibleList[index];
+    const card = document.querySelector(`.torrent-card[data-info-hash="${t.infoHash}"]`);
+    if (card) {
+      card.classList.add('is-keyboard-focused');
+      card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }
+}
+
+function moveFocus(delta) {
+  if (!latestVisibleList.length) return -1;
+  let newIndex;
+  if (focusedCardIndex < 0) {
+    newIndex = delta > 0 ? 0 : latestVisibleList.length - 1;
+  } else {
+    newIndex = Math.max(0, Math.min(latestVisibleList.length - 1, focusedCardIndex + delta));
+  }
+  setFocusedCard(newIndex);
+  return newIndex;
+}
+
+function openShortcutsPanel() {
+  document.getElementById('shortcuts-modal')?.classList.add('is-open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeShortcutsPanel() {
+  document.getElementById('shortcuts-modal')?.classList.remove('is-open');
+  document.body.style.overflow = '';
+}
+
+function initKeyboardShortcuts() {
+  document.addEventListener('keydown', (e) => {
+    const shortcutsOpen = document.getElementById('shortcuts-modal')?.classList.contains('is-open');
+
+    if (e.key === 'Escape') {
+      if (shortcutsOpen) { closeShortcutsPanel(); return; }
+      if (isAnyModalOpen()) return;
+      if (selectedInfoHashes.size > 0) { clearSelection(); return; }
+      if (focusedCardIndex >= 0) { setFocusedCard(-1); return; }
+      return;
+    }
+
+    if (shortcutsOpen) return;
+    if (isAnyModalOpen()) return;
+    if (isTypingContext()) return;
+
+    const modKey = e.metaKey || e.ctrlKey;
+
+    if (modKey && e.key === 'a') {
+      e.preventDefault();
+      selectAllVisible();
+      return;
+    }
+
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const delta = e.key === 'ArrowDown' ? 1 : -1;
+      const newIndex = moveFocus(delta);
+      if (e.shiftKey && newIndex >= 0) {
+        const t = latestVisibleList[newIndex];
+        if (t) {
+          selectedInfoHashes.add(t.infoHash);
+          const card = document.querySelector(`.torrent-card[data-info-hash="${t.infoHash}"]`);
+          if (card) syncCardSelectionState(card, t.infoHash);
+          updateBulkToolbar();
+        }
+      }
+      return;
+    }
+
+    if (e.key === '?') {
+      e.preventDefault();
+      openShortcutsPanel();
+      return;
+    }
+  });
+
+  document.getElementById('btn-shortcuts')?.addEventListener('click', openShortcutsPanel);
+  const sm = document.getElementById('shortcuts-modal');
+  sm?.querySelector('.modal-scrim')?.addEventListener('click', closeShortcutsPanel);
+  sm?.querySelector('.shortcuts-close')?.addEventListener('click', closeShortcutsPanel);
+}
+
+/* ═══════════════════════════════════════════════════════════════
    Boot
 ════════════════════════════════════════════════════════════════ */
 applyTheme(localStorage.getItem('theme') || 'dark');
 initModals();
+initFolderFilters();
+initEmptyStateButtonBehavior();
+initBulkActions();
+initKeyboardShortcuts();
 fetch(`${API}/config`).then(r => r.json()).then(cfg => setDirDisplay(cfg.downloadDir || './downloads')).catch(() => {});
 poll();
 setInterval(poll, 2500);
